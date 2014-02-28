@@ -84,6 +84,7 @@ class UserInfo(CombinedMultiDict, UserMixin):
             acc = self._precache(data, force)
         else:
             data = self._create_guest()
+            acc = self._precache(data, force)
 
         self.info = CallbackDict(data, on_update)
         #FIXME remove req after everybody start using flask request.
