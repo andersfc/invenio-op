@@ -36,3 +36,17 @@ disconnect_handlers = RegistryProxy(
 """
 Registry of handlers for authorized handler callbacks
 """
+
+signup_handlers = RegistryProxy(
+    'oauthclientext.signuphandlers', DictRegistry
+)
+"""
+Registry of handlers for signup handlers
+"""
+
+account_handlers = RegistryProxy(
+    'oauthclientext.accounthandlers', DictRegistry
+)
+"""
+Registry of handlers for initializing an account.
+"""

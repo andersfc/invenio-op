@@ -20,20 +20,51 @@
 import six
 from functools import wraps, partial
 from werkzeug.utils import import_string
-from flask import session, redirect, flash, url_for, current_app
+from flask import session, redirect, flash, url_for, current_app, request, \
+    render_template
 from flask.ext.login import current_user
 
 from invenio.base.globals import cfg
 
 from .models import RemoteToken, RemoteAccount
+from .errors import OAuthError, OAuthClientError, OAuthRejectedRequestError
+from .utils import oauth_authenticate, oauth_get_user, oauth_register
+from .client import oauth, signup_handlers
+from .forms import EmailSignUpForm
 
-
+#
+# Token handling
+#
 def token_session_key(remote_app):
     """ Generate a session key used to store the token for a remote app """
     return '%s_%s' % (cfg['OAUTHCLIENT_SESSION_KEY_PREFIX'], remote_app)
 
 
+def response_token_setter(remote, resp):
+    """ Extract token from response and set it for the user. """
+    if resp is None:
+        raise OAuthRejectedRequestError("User rejected request.", remote)
+    else:
+        if 'access_token' in resp:
+            return oauth2_token_setter(remote, resp)
+        elif 'oauth_token' in resp and 'oauth_token_secret' in resp:
+            return oauth1_token_setter(remote, resp)
+        elif 'error' in resp:
+            # Only OAuth2 specifies how to send error messages
+            raise OAuthClientError(
+                'Authorization with remote service failed.', remote, resp,
+            )
+    raise OAuthError(
+        "Bad OAuth authorized request", remote=remote, response=resp
+    )
+
+
 def oauth1_token_setter(remote, resp, token_type='', extra_data=None):
+    """
+    Set an OAuth1 token.
+
+    You likely want to use ``response_token_setter`` instead.
+    """
     return token_setter(
         remote,
         resp['oauth_token'],
@@ -44,6 +75,11 @@ def oauth1_token_setter(remote, resp, token_type='', extra_data=None):
 
 
 def oauth2_token_setter(remote, resp, token_type='', extra_data=None):
+    """
+    Set an OAuth2 token.
+
+    You likely want to use ``response_token_setter`` instead.
+    """
     return token_setter(
         remote,
         resp['access_token'],
@@ -55,7 +91,9 @@ def oauth2_token_setter(remote, resp, token_type='', extra_data=None):
 
 def token_setter(remote, token, secret='', token_type='', extra_data=None):
     """
-    Set token for user
+    Set token for user.
+
+    You likely want to use ``response_token_setter`` instead.
     """
     session[token_session_key(remote.name)] = (token, secret)
 
@@ -106,41 +144,123 @@ def token_getter(remote, token=''):
     return session.get(session_key, None)
 
 
-def default_handler(resp, remote, *args, **kwargs):
+def token_delete(remote, token=''):
     """
-    Default authorized handler
+    Remove OAuth access tokens from session.
+    """
+    session_key = token_session_key(remote.name)
+    return session.pop(session_key, None)
+
+
+#
+# Error handling decorators
+#
+def oauth_error_handler(f):
+    """
+    Decorator to handle deposition exceptions
+    """
+    @wraps(f)
+    def inner(*args, **kwargs):
+        # OAuthErrors should not happen, so they are not caught here. Hence
+        # they will result in a 500 Internal Server Error which is what we
+        # are interested in.
+        try:
+            return f(*args, **kwargs)
+        except OAuthClientError as e:
+            current_app.logger.warning(e.message, exc_info=True)
+            return oauth2_handle_error(
+                e.remote, e.response, e.code, e.uri, e.description
+            )
+        except OAuthRejectedRequestError:
+            flash("You rejected the authentication request.")
+            return redirect('/')
+    return inner
+
+
+#
+# Handlers
+#
+@oauth_error_handler
+def authorized_default_handler(resp, remote, *args, **kwargs):
+    """
+    Default authorized handler.
+
+    Stores access token in session.
 
     :param resp:
     :param remote:
     """
-    if resp is not None:
-        if 'access_token' in resp:
-            oauth2_token_setter(remote, resp)
-        elif 'oauth_token' in resp and 'oauth_token_secret' in resp:
-            oauth1_token_setter(remote, resp)
-        elif 'error' in resp:
-            # Only OAuth2 specifies how to send error messages
-            error_code = resp['error']
-            error_uri = resp.get('error_uri', None)
-            error_description = resp.get('error_description', None)
-            return oauth2_handle_error(
-                remote, resp, error_code, error_uri, error_description
-            )
+    response_token_setter(remote, resp)
+    return redirect('/')
+
+
+@oauth_error_handler
+def authorized_signup_handler(resp, remote, *args, **kwargs):
+    """
+    Authorized handler for sign-in/up functionality
+
+    :param resp:
+    :param remote:
+    """
+    # Remove any previously stored auto register session key
+    session.pop(token_session_key(remote.name)+'_autoregister', None)
+
+    # Store token in session
+    # ----------------------
+    # Set token in session - token object only returned if
+    # current_user.is_autenticated().
+    token = response_token_setter(remote, resp)
+    handlers = signup_handlers[remote.name]
+
+    # Sign-in/up user
+    # ---------------
+    if not current_user.is_authenticated():
+        account_info = handlers['info'](resp)
+
+        # TODO extract access token from token_getter
+        user = oauth_get_user(
+            remote.consumer_key,
+            account_info=account_info,
+            access_token=token_getter(remote)[0],
+        )
+
+        if user is None:
+            # Auto sign-up if user not found
+            user = oauth_register(account_info)
+            if user is None:
+                # Auto sign-up requires extra information
+                session[token_session_key(remote.name)+'_autoregister'] = True
+                return redirect(url_for(
+                    ".signup",
+                    remote_app=remote.name,
+                    next=request.args.get('next', '/')
+                ))
+
+        # Authenticate user
+        if not oauth_authenticate(remote.consumer_key, user,
+                                  require_existing_link=False):
+            return current_app.login_manager.unauthorized()
+
+        # Link account
+        # ------------
+        # Need to store token in database instead of only the session when
+        # called first time.
+        token = response_token_setter(remote, resp)
+
+    # Setup account
+    # -------------
+    if not token.remote_account.extra_data and \
+       remote.name in signup_handlers:
+        handlers['setup'](token)
+
+    # Redirect to next
+    if request.args.get('next', None):
+        return redirect(request.args.get('next'))
     else:
-        flash("You rejected the authentication request.")
-    return redirect('/')
+        return redirect('/')
 
 
-def oauth2_handle_error(remote, resp, error_code, error_uri,
-                        error_description):
-    """
-    Default handling of OAuth 2 errors when exchange of one time
-    code for an access token fails.
-    """
-    flash("Authorization with remote service failed.")
-    return redirect('/')
-
-
+@oauth_error_handler
 def disconnect_handler(remote, *args, **kwargs):
     if not current_user.is_authenticated():
         return current_app.login_manager.unauthorized()
@@ -155,6 +275,74 @@ def disconnect_handler(remote, *args, **kwargs):
     return redirect(url_for('oauthclient_settings.index'))
 
 
+def signup_handler(remote, *args, **kwargs):
+    """ Handle extra signup information. """
+    # User already authenticated so move on
+    if current_user.is_authenticated():
+        return redirect("/")
+
+    # Retrieve token from session
+    oauth_token = token_getter(remote)
+    if not oauth_token:
+        return redirect("/")
+
+    # Test to see if this is coming from on authorized request
+    if not session.get(token_session_key(remote.name)+'_autoregister', False):
+        return redirect(url_for(".login", remote_app=remote.name))
+
+    form = EmailSignUpForm(request.form)
+
+    if form.validate_on_submit():
+        # Register user
+        user = oauth_register(form.data)
+
+        if user is None:
+            raise OAuthError("Could not create user.", remote)
+
+        # Remove session key
+        session.pop(token_session_key(remote.name)+'_autoregister', None)
+
+        # Authenticate the user
+        if not oauth_authenticate(remote.consumer_key, user,
+                                  require_existing_link=False):
+            return current_app.login_manager.unauthorized()
+
+        # Link account and set session data
+        token = token_setter(remote, oauth_token[0], secret=oauth_token[1])
+        handlers = signup_handlers[remote.name]
+
+        if token is None:
+            raise OAuthError("Could not create token for user.", remote)
+
+        if not token.remote_account.extra_data:
+            handlers['setup'](token)
+
+        # Redirect to next
+        if request.args.get('next', None):
+            return redirect(request.args.get('next'))
+        else:
+            return redirect('/')
+
+    return render_template(
+        "oauthclient/signup.html",
+        form=form,
+        remote=remote,
+        app_title=cfg['OAUTHCLIENT_REMOTE_APPS'][remote.name].get('title', ''),
+        app_description=
+        cfg['OAUTHCLIENT_REMOTE_APPS'][remote.name].get('description', ''),
+        app_icon=cfg['OAUTHCLIENT_REMOTE_APPS'][remote.name].get('icon', None),
+    )
+
+
+def oauth_logout_handler(sender_app, user=None):
+    """ Remove all access tokens from session on logout. """
+    for remote in oauth.remote_apps.values():
+        token_delete(remote)
+
+
+#
+# Helpers
+#
 def make_handler(f, remote, with_response=True):
     """
     Make a handler for authorized and disconnect callbacks
@@ -178,3 +366,13 @@ def make_token_getter(remote):
     Make a token getter for a remote application
     """
     return partial(token_getter, remote)
+
+
+def oauth2_handle_error(remote, resp, error_code, error_uri,
+                        error_description):
+    """
+    Default handling of OAuth 2 errors when exchange of one time
+    code for an access token fails.
+    """
+    flash("Authorization with remote service failed.")
+    return redirect('/')
