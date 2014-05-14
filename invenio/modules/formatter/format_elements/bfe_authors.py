@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-##
+#
 ## This file is part of Invenio.
-## Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2013 CERN.
+## Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2013, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -16,9 +16,8 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Invenio; if not, write to the Free Software Foundation, Inc.,
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
-"""BibFormat element - Prints authors
-"""
-__revision__ = "$Id$"
+
+""" BibFormat element - Prints authors. """
 
 import re
 import six
@@ -35,16 +34,16 @@ from invenio.legacy.bibauthority.engine import \
 
 
 def format_element(bfo, limit, separator=' ; ',
-           extension='[...]',
-           print_links="yes",
-           print_affiliations='no',
-           affiliation_prefix=' (',
-           affiliation_suffix=')',
-           interactive="no",
-           highlight="no",
-           link_author_pages="no",
-           link_mobile_pages="no",
-           relator_code_pattern=None):
+                   extension='[...]',
+                   print_links="yes",
+                   print_affiliations='no',
+                   affiliation_prefix=' (',
+                   affiliation_suffix=')',
+                   interactive="no",
+                   highlight="no",
+                   link_author_pages="no",
+                   link_mobile_pages="no",
+                   relator_code_pattern=None):
     """
     Prints the list of authors of a record.
 
@@ -83,10 +82,9 @@ def format_element(bfo, limit, separator=' ; ',
         pattern = '%s' + CFG_BIBAUTHORITY_PREFIX_SEP + "("
         for control_no in author.get('0', []):
             if pattern % (CFG_BIBAUTHORITY_TYPE_NAMES["INSTITUTION"]) in control_no:
-                author['u0'] = control_no # overwrite if multiples
+                author['u0'] = control_no  # overwrite if multiples
             elif pattern % (CFG_BIBAUTHORITY_TYPE_NAMES["AUTHOR"]) in control_no:
-                author['a0'] = control_no # overwrite if multiples
-
+                author['a0'] = control_no  # overwrite if multiples
 
     if relator_code_pattern:
         p = re.compile(relator_code_pattern)
@@ -109,8 +107,8 @@ def format_element(bfo, limit, separator=' ; ',
                 if link_author_pages == "yes":
                     author['a'] = '<a rel="author" href="' + CFG_SITE_URL + \
                                   '/author/' + quote(author['a']) + \
-                                  '?recid=' +  bibrec_id + \
-                                  '&ln=' + bfo.lang + \
+                                  '?recid=' + bibrec_id + \
+                                  '&ln=' + str(bfo.lang) + \
                                   '">' + escape(author['a']) + '</a>'
                 elif link_mobile_pages == 'yes':
                     author['a'] = '<a rel="external" href="#page=search' + \
@@ -119,14 +117,15 @@ def format_element(bfo, limit, separator=' ; ',
                 else:
                     auth_coll_param = ''
                     if 'a0' in author:
-                        recIDs = get_low_level_recIDs_from_control_no(author['a0'])
+                        recIDs = get_low_level_recIDs_from_control_no(
+                            author['a0'])
                         if len(recIDs):
                             auth_coll_param = '&amp;c=' + \
                                               CFG_BIBAUTHORITY_AUTHORITY_COLLECTION_NAME
                     author['a'] = '<a href="' + CFG_SITE_URL + \
                                   '/search?f=author&amp;p=' + quote(author['a']) + \
-                                   auth_coll_param + \
-                                  '&amp;ln=' + bfo.lang + \
+                        auth_coll_param + \
+                                  '&amp;ln=' + str(bfo.lang) + \
                                   '">' + escape(author['a']) + '</a>'
 
         if 'u' in author:
@@ -140,10 +139,10 @@ def format_element(bfo, limit, separator=' ; ',
                     if len(recIDs):
                         author['u'] = '<a href="' + CFG_SITE_URL + '/record/' + \
                                       str(recIDs[0]) + \
-                                      '?ln=' + bfo.lang + \
+                                      '?ln=' + str(bfo.lang) + \
                                       '">' + author['u'] + '</a>'
                 author['u'] = affiliation_prefix + author['u'] + \
-                              affiliation_suffix
+                    affiliation_suffix
 
     # Flatten author instances
     if print_affiliations == 'yes':
@@ -153,7 +152,7 @@ def format_element(bfo, limit, separator=' ; ',
         authors = [author.get('a', '')
                    for author in authors]
 
-    if limit.isdigit() and  nb_authors > int(limit) and interactive != "yes":
+    if limit.isdigit() and nb_authors > int(limit) and interactive != "yes":
         return separator.join(authors[:int(limit)]) + extension
 
     elif limit.isdigit() and nb_authors > int(limit) and interactive == "yes":
@@ -189,15 +188,16 @@ def format_element(bfo, limit, separator=' ; ',
         }
 
         </script>
-        ''' % {'show_less':_("Hide"),
-             'show_more':_("Show all %(x_num)i authors", x_num=nb_authors),
-             'extension':extension,
-             'recid': bibrec_id}
+        ''' % {'show_less': _("Hide"),
+               'show_more': _("Show all %(x_num)i authors", x_num=nb_authors),
+               'extension': extension,
+               'recid': bibrec_id}
         out += '<script type="text/javascript">set_up_%s()</script>' % bibrec_id
 
         return out
     elif nb_authors > 0:
         return separator.join(authors)
+
 
 def escape_values(bfo):
     """
