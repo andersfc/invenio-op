@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+#
 ## This file is part of Invenio.
-## Copyright (C) 2011, 2012, 2013 CERN.
+## Copyright (C) 2011, 2012, 2013, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -18,13 +19,6 @@
 
 import warnings
 
-## Import the remote debugger as a first thing, if allowed
-#FIXME enable remote_debugger when invenio.config is ready
-#try:
-#    from invenio.utils import remote_debugger
-#except:
-#    remote_debugger = None
-
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.wrappers import BaseResponse
 
@@ -35,7 +29,8 @@ from .request_class import LegacyRequest
 
 
 def setup_app(app):
-    ## Legacy config support
+    """Setup up the app."""
+    # Legacy config support
     USE_X_SENDFILE = app.config.get('CFG_BIBDOCFILE_USE_XSENDFILE')
     DEBUG = app.config.get('CFG_DEVEL_SITE', 0) > 0
     app.config.setdefault('USE_X_SENDFILE', USE_X_SENDFILE)
@@ -43,14 +38,11 @@ def setup_app(app):
     app.debug = app.config['DEBUG']
 
     class LegacyAppMiddleware(object):
+
         def __init__(self, app):
             self.app = app
 
         def __call__(self, environ, start_response):
-            #FIXME
-            #if remote_debugger:
-            #    remote_debugger.start()
-
             with self.app.request_context(environ):
                 g.start_response = start_response
                 try:
@@ -62,7 +54,7 @@ def setup_app(app):
 
                 return response(environ, start_response)
 
-    ## Set custom request class.
+    # Set custom request class.
     app.request_class = LegacyRequest
     app.wsgi_app = LegacyAppMiddleware(app)
 
@@ -82,7 +74,8 @@ def setup_app(app):
             try:
                 return current_app.send_static_file(request.path)
             except NotFound as e:
-                current_app.logger.error(str(e) + " " + request.path)
+                current_app.logger.info(str(e) + " " + request.path)
+                error = e
         if error.code == 404:
             return render_template('404.html'), 404
         return str(error), error.code
@@ -98,14 +91,13 @@ def setup_app(app):
             is_mp_legacy_publisher_path, mp_legacy_publisher, \
             application as legacy_application
         possible_module, possible_handler = is_mp_legacy_publisher_path(
-                                            request.environ['PATH_INFO'])
+            request.environ['PATH_INFO'])
         if possible_module is not None:
             legacy_publisher = lambda req: \
                 mp_legacy_publisher(req, possible_module, possible_handler)
             return legacy_application(request.environ, g.start_response,
                                       handler=legacy_publisher)
         return render_template('404.html'), 404
-
 
     @app.endpoint('static')
     def static_handler_with_legacy_publisher(*args, **kwargs):
@@ -128,7 +120,7 @@ def setup_app(app):
 
     try:
         # pylint: disable=E0611
-        from invenio.webinterface_handler_local import customize_app
+        from invenio.webinterface_handler_local import customize_app  # noqa
         # pylint: enable=E0611
         warnings.warn("Do not use 'invenio.webinterface_handler_local:"
                       "customize_app' directly. Please, adapt your function "
@@ -136,7 +128,6 @@ def setup_app(app):
                       "EXTENSIONS = ['mypackage.customize_app'] instead.",
                       DeprecationWarning)
     except ImportError:
-        ## No customization needed.
         pass
 
     return app
