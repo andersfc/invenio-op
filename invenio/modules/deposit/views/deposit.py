@@ -62,9 +62,7 @@ default_breadcrumb_root(blueprint, '.webdeposit')
 
 
 def deposition_error_handler(endpoint='.index'):
-    """
-    Decorator to handle deposition exceptions
-    """
+    """ Decorator to handle deposition exceptions. """
     def decorator(f):
         @wraps(f)
         def inner(*args, **kwargs):
@@ -102,7 +100,7 @@ def deposition_error_handler(endpoint='.index'):
 @register_breadcrumb(blueprint, '.', _('Deposit'))
 def index():
     """
-    Renders the deposition index page
+    Render the deposition index page.
 
     The template context can be customized via the template_context_created
     signal.
@@ -396,7 +394,6 @@ def upload_url(deposition_type=None, uuid=None):
     )
 
 
-#@blueprint.route('/%s/<int:uuid>/file/' % deptypes, methods=['POST'])
 @blueprint.route('/<int:uuid>/file/', methods=['POST'])
 @login_required
 @deposition_error_handler()
@@ -465,9 +462,7 @@ def delete_file(deposition_type=None, uuid=None):
 @login_required
 @deposition_error_handler()
 def get_file(deposition_type=None, uuid=None):
-    """
-    Download an uploaded file
-    """
+    """ Download an uploaded file. """
     deposition = Deposition.get(uuid, current_user, type=deposition_type)
 
     df = deposition.get_file(request.args.get('file_id'))
