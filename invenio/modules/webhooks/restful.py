@@ -23,6 +23,8 @@ from functools import wraps
 
 from flask.ext.restful import Resource, abort
 from invenio.ext.restful import require_api_auth, require_oauth_scopes
+from invenio.modules.oauth2server.models import Scope
+from invenio.modules.oauth2server.registry import scopes
 from .models import Receiver, ReceiverDoesNotExists, InvalidPayload, \
     WebhookError
 
@@ -102,3 +104,11 @@ def setup_app(app, api):
         ReceiverEventListResource,
         '/api/hooks/receivers/<string:receiver_id>/events/',
     )
+
+    with app.app_context():
+        scopes.register(Scope(
+            'webhooks:event',
+            group='Notifications',
+            help_text='Allow notifications from external service.',
+            internal=True,
+        ))
