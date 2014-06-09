@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 ## This file is part of Invenio.
-## Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013 CERN.
+## Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -958,7 +958,10 @@ def get_cache_last_updated_timestamp():
         return "1970-01-01 00:00:00"
     timestamp = f.read()
     f.close()
-    return timestamp
+
+    # Remove trailing newlines and whitespace.
+    timestamp = timestamp.strip()
+    return timestamp or "1970-01-01 00:00:00"
 
 def set_cache_last_updated_timestamp(timestamp):
     """Set last updated cache timestamp to TIMESTAMP."""
