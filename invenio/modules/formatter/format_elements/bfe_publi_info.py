@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 ##
 ## This file is part of Invenio.
-## Copyright (C) 2006, 2007, 2008, 2010, 2011 CERN.
+## Copyright (C) 2006, 2007, 2008, 2010, 2011, 2014 CERN.
 ##
 ## Invenio is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License as
@@ -16,20 +16,15 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Invenio; if not, write to the Free Software Foundation, Inc.,
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
-"""BibFormat element - Prints publcation information and link to ejournal
-"""
-__revision__ = "$Id$"
+
+""" Print publication information and link to ejournal. """
 
 from urllib import quote
 import cgi
 
+
 def format_element(bfo):
-    """
-    Displays inline publication information with html link to ejournal
-    (when available).
-    """
-
-
+    """ Display publication info with link to ejournal (when available). """
     out = ''
 
     publication_info = bfo.field('909C4')
@@ -64,17 +59,20 @@ def format_element(bfo):
         out += '&amp;volume=' + volume
         out += '&amp;year=' + year
         out += '&amp;page='
-        page = pages.split('-')# get first page from range
+        page = pages.split('-')  # get first page from range
         if len(page) > 0:
             out += page[0]
-        out += '">%(journal)s :%(volume)s %(year)s %(page)s</a>' % {'journal': journal,
-                                                                    'volume': volume,
-                                                                    'year': year,
-                                                                    'page': pages}
+        out += '">%(journal)s :%(volume)s %(year)s %(page)s</a>' % {
+            'journal': journal,
+            'volume': volume,
+            'year': year,
+            'page': pages
+        }
     else:
-        out += journal_source + ': '
+        if journal_source:
+            out += journal_source + ': '
         if volume is not None:
-            out +=  volume
+            out += volume
         if year is not None:
             out += ' (' + year + ') '
         if number is not None:
@@ -84,14 +82,7 @@ def format_element(bfo):
 
     return out
 
+
 def escape_values(bfo):
-    """
-    Called by BibFormat in order to check if output of this element
-    should be escaped.
-    """
+    """ Check if output of element should be escaped. """
     return 0
-
-
-
-
-
