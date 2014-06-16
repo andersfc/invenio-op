@@ -23,16 +23,21 @@ OAuth 2.0 Provider
 
 from __future__ import absolute_import
 
+import os
+
 from flask import Blueprint, current_app, request, render_template, jsonify, \
     abort
 from flask_oauthlib.contrib.oauth2 import bind_cache_grant, bind_sqlalchemy
 from flask.ext.login import login_required
+from flask.ext.breadcrumbs import register_breadcrumb
 
 from invenio.ext.sqlalchemy import db
 from invenio.ext.login import login_user
+from invenio.base.i18n import _
 
 from ..provider import oauth2
 from ..models import Client, OAuthUserProxy
+from ..registry import scopes as scopes_registry
 
 
 blueprint = Blueprint(
@@ -60,6 +65,10 @@ def setup_app():
     # to get and set the grant token.
     bind_cache_grant(current_app, oauth2, OAuthUserProxy.get_current_user)
 
+    # Disables oauthlib's secure transport detection in in debug mode.
+    if current_app.debug:
+        os.environ['DEBUG'] = '1'
+
 
 @oauth2.after_request
 def login_oauth2_user(valid, oauth):
@@ -75,6 +84,7 @@ def login_oauth2_user(valid, oauth):
 # Views
 #
 @blueprint.route('/authorize', methods=['GET', 'POST'])
+@register_breadcrumb(blueprint, '.', _('Authorize application'))
 @login_required
 @oauth2.authorize_handler
 def authorize(*args, **kwargs):
@@ -82,10 +92,19 @@ def authorize(*args, **kwargs):
     View for rendering authorization request.
     """
     if request.method == 'GET':
-        client_id = kwargs.get('client_id')
-        client = Client.query.filter_by(client_id=client_id).first()
-        kwargs['client'] = client
-        return render_template('oauth2server/authorize.html', **kwargs)
+        client = Client.query.filter_by(
+            client_id=kwargs.get('client_id')
+        ).first()
+
+        if not client:
+            abort(404)
+
+        ctx = dict(
+            client=client,
+            oauth_request=kwargs.get('request'),
+            scopes=map(lambda x: scopes_registry[x], kwargs.get('scopes', []))
+        )
+        return render_template('oauth2server/authorize.html', **ctx)
 
     confirm = request.form.get('confirm', 'no')
     return confirm == 'yes'
@@ -97,7 +116,7 @@ def access_token():
     """
     Token view handles exchange/refresh access tokens
     """
-    return None
+    return {}
 
 
 @blueprint.route('/errors')
