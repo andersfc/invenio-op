@@ -50,7 +50,8 @@ from invenio.base.globals import cfg
 ##
 
 def format_record(recID, of, ln=None, verbose=0, search_pattern=None,
-                  xml_record=None, user_info=None, on_the_fly=False):
+                  xml_record=None, user_info=None, on_the_fly=False,
+                  extra_context=None, qid=""):
     """
     Format a record in given output format.
 
@@ -165,7 +166,9 @@ def format_record(recID, of, ln=None, verbose=0, search_pattern=None,
                                               verbose=verbose,
                                               search_pattern=search_pattern,
                                               xml_record=xml_record,
-                                              user_info=user_info)
+                                              user_info=user_info,
+                                              qid=qid,
+                                              extra_context=extra_context)
         if of.lower() == 'xm':
             out = filter_hidden_fields(out, user_info)
         return out
@@ -233,7 +236,8 @@ def record_get_xml(recID, format='xm', decompress=zlib.decompress):
 def format_records(recIDs, of, ln=None, verbose=0, search_pattern=None,
                    xml_records=None, user_info=None, record_prefix=None,
                    record_separator=None, record_suffix=None, prologue="",
-                   epilogue="", req=None, on_the_fly=False):
+                   epilogue="", req=None, on_the_fly=False,
+                   extra_context=None):
     """
     Format records given by a list of record IDs or a list of records
     as xml.  Adds a prefix before each record, a suffix after each
@@ -325,7 +329,7 @@ def format_records(recIDs, of, ln=None, verbose=0, search_pattern=None,
         ln = ln or cfg['CFG_SITE_LANG']
         formatted_record = format_record(recIDs[i], of, ln, verbose, \
                                          search_pattern, xml_records[i],\
-                                         user_info, on_the_fly)
+                                         user_info, on_the_fly, extra_context)
         formatted_records += formatted_record
         if req is not None:
             req.write(formatted_record)
