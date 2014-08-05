@@ -537,7 +537,6 @@ def print_records(recIDs, of='hb', ln=None, verbose=0,
     from flask import request
     from invenio.base.i18n import wash_language
     from invenio.ext.template import render_template_to_string
-    from invenio.modules.formatter.engine import format_record
     from invenio.modules.search.models import Format
     from invenio.utils.pagination import Pagination
     from invenio.modules.formatter.engine import TEMPLATE_CONTEXT_FUNCTIONS_CACHE
